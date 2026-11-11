@@ -1,0 +1,799 @@
+<!doctype html>
+<html lang="zh-CN" dir="ltr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="light dark" />
+<link rel="icon" href="data:," />
+<title>PDF 全文提取 · 导出 TXT</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&family=Tajawal:wght@400;500;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  :root{
+    --bg:#f4f2ec; --surface:#ffffff; --surface2:#ece9e0; --ink:#1c2420; --muted:#5c665f;
+    --line:#ddd8cb; --accent:#0f6b4f; --accent-ink:#ffffff; --accent-soft:#e2efe8;
+    --danger:#b3352b; --danger-soft:#fbeae8; --warn:#8a5a12; --warn-soft:#fdf3dd;
+    --code-bg:#17211c; --code-ink:#e8f0ea; --radius:14px;
+    --shadow:0 1px 2px rgba(20,30,25,.06),0 8px 24px rgba(20,30,25,.06);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#141816; --surface:#1d2320; --surface2:#262d29; --ink:#ecefea; --muted:#a7b0a9;
+      --line:#333b36; --accent:#3cb48a; --accent-ink:#0c1712; --accent-soft:#1e352b;
+      --danger:#f0928a; --danger-soft:#3d2220; --warn:#e8bc6a; --warn-soft:#38301c;
+      --code-bg:#0d100e; --code-ink:#dfe9e1; --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.25);
+    }
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans SC","Tajawal",system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;line-height:1.75;font-size:16px}
+  button,[role="button"],select,summary,input:not([type="checkbox"],[type="radio"]){min-height:2.25rem}
+  .wrap{max-width:880px;margin:0 auto;padding:28px 18px 64px}
+  .langbar{display:flex;justify-content:flex-end;margin-bottom:14px}
+  .langswitch{display:inline-flex;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px;gap:4px;box-shadow:var(--shadow)}
+  .langswitch button{font:inherit;font-weight:700;font-size:15px;border:0;background:transparent;color:var(--muted);border-radius:999px;padding:6px 20px;cursor:pointer;min-height:2.4rem}
+  .langswitch button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+  h1{font-size:clamp(26px,5vw,38px);line-height:1.35;margin:0 0 8px;font-weight:900}
+  .lede{color:var(--muted);font-size:17px;margin:0 0 26px;max-width:660px}
+  .lede strong{color:var(--ink)}
+  .steps{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:22px}
+  .step{display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:7px 10px 7px 16px;font-weight:700;font-size:14.5px}
+  .step .n{width:26px;height:26px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-size:14px;flex:none}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px;margin-bottom:20px}
+  #dropzone{border:2px dashed var(--line);border-radius:var(--radius);padding:38px 20px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s;background:var(--surface)}
+  #dropzone:hover,#dropzone:focus-visible{border-color:var(--accent);outline:none}
+  #dropzone.drag{border-color:var(--accent);background:var(--accent-soft)}
+  #dropzone .big{font-size:19px;font-weight:900;margin:10px 0 2px}
+  #dropzone .small{color:var(--muted);font-size:14.5px;margin:0}
+  #dropzone svg{color:var(--accent)}
+  .filechip{display:none;align-items:center;gap:12px;background:var(--surface2);border-radius:10px;padding:12px 14px;margin-top:16px}
+  .filechip.show{display:flex}
+  .filechip .fname{font-weight:700;word-break:break-all;line-height:1.5}
+  .filechip .fmeta{color:var(--muted);font-size:13.5px}
+  .filechip button{margin-inline-start:auto;flex:none}
+  #progressWrap{display:none;margin-top:18px}
+  #progressWrap.show{display:block}
+  .bar{height:10px;background:var(--surface2);border-radius:99px;overflow:hidden}
+  .bar i{display:block;height:100%;width:0%;background:var(--accent);border-radius:99px;transition:width .2s}
+  #progressText{font-size:14px;color:var(--muted);margin-top:6px}
+  .alert{display:none;border-radius:10px;padding:12px 16px;margin-top:16px;font-size:15px}
+  .alert.show{display:block}
+  .alert.err{background:var(--danger-soft);color:var(--danger)}
+  .alert.warn{background:var(--warn-soft);color:var(--warn)}
+  .optrow{display:flex;gap:14px;flex-wrap:wrap;align-items:end;margin:18px 0 4px}
+  .optrow label{display:flex;flex-direction:column;gap:5px;font-size:14px;font-weight:700;color:var(--muted)}
+  select{font:inherit;font-size:15px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:6px 10px;min-height:2.5rem}
+  .btn{font:inherit;font-weight:800;font-size:16px;border-radius:11px;border:1px solid transparent;padding:10px 22px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;justify-content:center}
+  .btn-primary{background:var(--accent);color:var(--accent-ink)}
+  .btn-primary:disabled{opacity:.45;cursor:not-allowed}
+  .btn-ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+  .btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
+  .btn-small{font-size:14px;padding:6px 14px;border-radius:9px}
+  #resultCard{display:none}
+  #resultCard.show{display:block}
+  .stats{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+  .stat{background:var(--surface2);border-radius:10px;padding:8px 16px;font-size:14.5px}
+  .stat b{font-size:17px}
+  #preview{width:100%;min-height:340px;max-height:560px;overflow:auto;background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:16px 18px;font-family:inherit;font-size:15px;line-height:1.9;white-space:pre-wrap;word-break:break-word;margin:0}
+  .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+  h2{font-size:21px;margin:0 0 10px;font-weight:900}
+  h3{font-size:17px;margin:22px 0 6px;font-weight:900}
+  .card p{margin:0 0 10px;color:var(--muted)}
+  .card p strong,.card li strong{color:var(--ink)}
+  ol.guide{margin:0;padding-inline-start:22px;color:var(--muted)}
+  ol.guide li{margin-bottom:6px}
+  ul.tight{margin:0;padding-inline-start:20px;color:var(--muted)}
+  ul.tight li{margin-bottom:5px}
+  code{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.88em;background:var(--surface2);padding:1px 6px;border-radius:6px;direction:ltr;unicode-bidi:embed}
+  .codeblock{position:relative;margin:10px 0 16px}
+  .codeblock pre{background:var(--code-bg);color:var(--code-ink);border-radius:12px;padding:18px;overflow-x:auto;direction:ltr;text-align:left;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:13px;line-height:1.65;margin:0;white-space:pre}
+  .copybtn{position:absolute;top:10px;right:10px;background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:8px;font:inherit;font-size:13px;font-weight:700;padding:5px 12px;cursor:pointer;min-height:2.25rem}
+  .copybtn:hover{background:rgba(255,255,255,.22)}
+  .tree{background:var(--surface2);border:1px solid var(--line);border-radius:12px;padding:16px 18px;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:13.5px;line-height:1.8;direction:ltr;text-align:left;white-space:pre;overflow-x:auto;margin:0 0 6px}
+  table{width:100%;border-collapse:collapse;font-size:15px;margin:8px 0 4px}
+  th,td{padding:9px 10px;text-align:start;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-weight:800;color:var(--ink)}
+  td{color:var(--muted)}
+  .tblwrap{overflow-x:auto}
+  footer{color:var(--muted);font-size:14px;text-align:center;margin-top:8px}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--ink);color:var(--bg);padding:10px 22px;border-radius:99px;font-weight:700;font-size:15px;transition:transform .25s;z-index:50;box-shadow:var(--shadow);max-width:92vw;text-align:center}
+  .toast.show{transform:translateX(-50%) translateY(0)}
+  @media (max-width:560px){
+    .wrap{padding:20px 12px 48px}
+    .card{padding:16px}
+    #dropzone{padding:28px 14px}
+    .btn{width:100%}
+    .actions .btn{width:auto;flex:1}
+    th,td{padding:8px 6px;font-size:14px}
+  }
+  @media (prefers-reduced-motion: reduce){*{transition:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="langbar">
+    <div class="langswitch" role="group" aria-label="Language / 语言">
+      <button type="button" id="langZh" aria-pressed="true">中文</button>
+      <button type="button" id="langEn" aria-pressed="false">English</button>
+    </div>
+  </div>
+
+  <h1 data-i18n="title">PDF 全文提取 · 导出 TXT</h1>
+  <p class="lede" data-i18n="lede">把论文 PDF 拖进来，即可得到<strong>全文纯文本</strong>，一键导出为 <strong>UTF-8 编码的 TXT 文件</strong>。全部在浏览器本地处理，文件不会上传到任何服务器。</p>
+
+  <div class="steps" aria-hidden="true">
+    <span class="step"><span class="n">1</span> <span data-i18n="step1">选择 PDF 文件</span></span>
+    <span class="step"><span class="n">2</span> <span data-i18n="step2">导出 TXT</span></span>
+  </div>
+
+  <div id="dropzone" role="button" tabindex="0" data-i18n-aria="dzAria" aria-label="选择 PDF 文件或拖放到这里">
+    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="M9 15l3 3 3-3"/></svg>
+    <p class="big" data-i18n="dzBig">把 PDF 拖到这里，或点击选择</p>
+    <p class="small" data-i18n="dzSmall">一次一个文件 · 浏览器本地处理 · 建议 50MB 以内</p>
+    <input type="file" id="fileInput" accept="application/pdf,.pdf" hidden>
+  </div>
+
+  <div class="filechip" id="fileChip">
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true" style="color:var(--accent);flex:none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+    <div>
+      <div class="fname" id="fileName">—</div>
+      <div class="fmeta" id="fileMeta">—</div>
+    </div>
+    <button class="btn btn-ghost btn-small" id="removeBtn" type="button" data-i18n="remove">移除</button>
+  </div>
+
+  <div id="progressWrap">
+    <div class="bar"><i id="progressBar"></i></div>
+    <div id="progressText">正在打开文件…</div>
+  </div>
+
+  <div class="alert err" id="errorBox" role="alert"></div>
+  <div class="alert warn" id="warnBox" role="status"></div>
+
+  <div class="optrow">
+    <label><span data-i18n="sepLabel">导出文件中的分页标记</span>
+      <select id="pageSep">
+        <option value="marker" selected data-i18n="sepMarker">分隔行：「— 第 N 页 —」</option>
+        <option value="blank" data-i18n="sepBlank">仅空行</option>
+        <option value="none" data-i18n="sepNone">无分隔</option>
+      </select>
+    </label>
+    <label><span data-i18n="colLabel">分栏处理</span>
+      <select id="colMode">
+        <option value="auto" selected data-i18n="colAuto">自动检测（需要时按双栏）</option>
+        <option value="single" data-i18n="colSingle">始终单栏</option>
+      </select>
+    </label>
+  </div>
+
+  <section class="card" id="resultCard" aria-live="polite">
+    <h2 data-i18n="resultTitle">提取结果</h2>
+    <div class="stats">
+      <span class="stat"><span data-i18n="statPages">页数</span>：<b id="statPages">0</b></span>
+      <span class="stat"><span data-i18n="statChars">字符</span>：<b id="statChars">0</b></span>
+      <span class="stat"><span data-i18n="statWords">词数</span>：<b id="statWords">0</b></span>
+      <span class="stat"><span data-i18n="statSize">TXT 大小</span>：<b id="statSize">0</b></span>
+    </div>
+    <pre id="preview" tabindex="0"></pre>
+    <div class="actions">
+      <button class="btn btn-primary" id="downloadBtn" type="button">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+        <span data-i18n="download">下载 TXT 文件</span>
+      </button>
+      <button class="btn btn-ghost" id="copyBtn" type="button" data-i18n="copyAll">复制全文</button>
+      <button class="btn btn-ghost" id="newBtn" type="button" data-i18n="newFile">新文件</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2 data-i18n="guideTitle">使用说明（两步）</h2>
+    <ol class="guide">
+      <li><strong data-i18n="g1t">第一步 · 选文件：</strong> <span data-i18n="g1">把 PDF 拖到上方区域，或点击选择。选择后自动开始提取。</span></li>
+      <li><strong data-i18n="g2t">第二步 · 导出：</strong> <span data-i18n="g2">在预览中确认文本，点击「下载 TXT 文件」，即以原文件名保存 UTF-8 文本；也可以直接复制全文。</span></li>
+    </ol>
+    <h3 data-i18n="notesTitle">关于论文排版的说明</h3>
+    <ul class="tight">
+      <li><strong data-i18n="n1t">阅读顺序：</strong> <span data-i18n="n1">标题与摘要在最前，然后是左栏全文，最后是右栏——不会左右混读。</span></li>
+      <li><strong data-i18n="n2t">双栏定位：</strong> <span data-i18n="n2">每栏的顶部按该栏第一个纵向紧密行序列的起始位置确定，而不是按文本块的高度猜测。</span></li>
+      <li><strong data-i18n="n3t">中文折行：</strong> <span data-i18n="n3">同一栏内被排版折断的中文行会自动拼接，不会跨栏拼接。</span></li>
+      <li><strong data-i18n="n4t">公式：</strong> <span data-i18n="n4">公式周边的文字与文本层中的符号会被提取；以图片绘制的公式可能不完整，这取决于 PDF 本身。</span></li>
+      <li><strong data-i18n="n5t">扫描版 PDF：</strong> <span data-i18n="n5">如果 PDF 只有图片、没有文本层，工具会给出提示，这类文件需要先做 OCR。</span></li>
+      <li><strong data-i18n="n6t">范围：</strong> <span data-i18n="n6">只提取纯文字，不提取图片、表格格式与参考文献排版。</span></li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2 data-i18n="repoTitle">代码仓库</h2>
+    <p data-i18n="repoIntro">把本页与下面的脚本放进同一个 GitHub 仓库即可自托管：网页版可直接用 GitHub Pages 发布（纯静态，无需服务器），Python 与 Gradio 版克隆后本地运行。仓库结构：</p>
+    <pre class="tree">pdf-to-txt/
+├── index.html          <span data-i18n="treeWeb">网页版（本页，pdf.js）</span>
+├── extract_pdf.py      <span data-i18n="treePy">命令行版（PyMuPDF）</span>
+├── app.py              <span data-i18n="treeGradio">Gradio 界面版（可选，自托管）</span>
+├── requirements.txt
+├── README.md           <span data-i18n="treeReadmeEn">英文说明</span>
+└── README.zh-CN.md     <span data-i18n="treeReadmeZh">中文说明</span></pre>
+
+    <h3 data-i18n="coreTitle">核心代码（网页版排序逻辑）</h3>
+    <p data-i18n="coreIntro">核心是阅读顺序重建：先按坐标把文字分组为行，识别通栏的标题/摘要，再分别确定左右两栏的起始位置，最后按「页眉 → 左栏 → 右栏 → 通栏结尾」拼接。中文折行只在同一栏内合并。</p>
+    <div class="codeblock">
+      <button class="copybtn" data-copy="coreCode" type="button" data-i18n="copy">复制</button>
+<pre id="coreCode">// 阅读顺序：标题/摘要 → 左栏全文 → 右栏全文
+function pageToText(items, pageWidth) {
+  const lines = buildLines(items);            // 按 Y 坐标分组为行
+  const mid = pageWidth / 2;
+  const full  = lines.filter(l =&gt; l.x0 &lt; mid - 10 &amp;&amp; l.x1 &gt; mid + 10);
+  const left  = lines.filter(l =&gt; !full.includes(l) &amp;&amp; l.cx &lt;  mid);
+  const right = lines.filter(l =&gt; !full.includes(l) &amp;&amp; l.cx &gt;= mid);
+  if (!left.length || !right.length) return joinLines(lines);
+
+  // 每栏顶部 = 该栏第一个「纵向紧密行序列」的起始行，
+  // 而不是由某个文本块的高度推断。
+  const cut = Math.max(seqStartY(left), seqStartY(right));
+  const header = lines.filter(l =&gt; l.y &gt; cut + 2);
+  const footer = full.filter(l =&gt; l.y &lt;= cut + 2);
+  return [joinLines(header),                 // 标题 + 摘要
+          joinLines(left.filter(l =&gt; l.y &lt;= cut + 2)),
+          joinLines(right.filter(l =&gt; l.y &lt;= cut + 2)),
+          joinLines(footer)]
+         .filter(Boolean).join("\n\n");
+}
+
+function seqStartY(colLines) {                // 第一个紧密序列的起始 Y
+  const s = [...colLines].sort((a, b) =&gt; b.y - a.y);
+  for (let i = 0; i &lt; s.length - 1; i++)
+    if (s[i].y - s[i + 1].y &lt;= Math.max(s[i].h, s[i + 1].h) * 2)
+      return s[i].y;
+  return s.length ? s[0].y : 0;
+}</pre>
+    </div>
+
+    <h3 data-i18n="pyTitle">命令行版（Python）</h3>
+    <div class="codeblock">
+      <button class="copybtn" data-copy="pipCmd" type="button" data-i18n="copy">复制</button>
+<pre id="pipCmd">pip install -r requirements.txt   # PyMuPDF（网页版无需安装）</pre>
+    </div>
+    <div class="codeblock">
+      <button class="copybtn" data-copy="pyCode" type="button" data-i18n="copy">复制</button>
+<pre id="pyCode">#!/usr/bin/env python3
+"""PDF 全文 -> TXT (UTF-8)。用法: python extract_pdf.py paper.pdf [-o out.txt]"""
+import argparse
+import fitz  # PyMuPDF
+
+def page_text(page):
+    blocks = [b for b in page.get_text("blocks") if b[4].strip()]
+    if not blocks:
+        return ""
+    mid = page.rect.width / 2
+    full  = [b for b in blocks if b[0] &lt; mid - 10 and b[2] &gt; mid + 10]
+    left  = [b for b in blocks if b not in full and (b[0] + b[2]) / 2 &lt;  mid]
+    right = [b for b in blocks if b not in full and (b[0] + b[2]) / 2 &gt;= mid]
+    if not left or not right:
+        return "\n".join(b[4].strip() for b in sorted(blocks, key=lambda b: b[1]))
+    def seq_top(col):  # 第一个纵向紧密块序列的起始位置 = 该栏顶部
+        s = sorted(col, key=lambda b: b[1])
+        for a, b in zip(s, s[1:]):
+            if b[1] - a[3] &lt;= max(a[3] - a[1], 12) * 1.2:
+                return a[1]
+        return s[0][1]
+    cut = max(seq_top(left), seq_top(right))
+    head   = sorted([b for b in blocks if b[1] &lt; cut - 2], key=lambda b: b[1])
+    body_l = sorted([b for b in left  if b[1] &gt;= cut - 2], key=lambda b: b[1])
+    body_r = sorted([b for b in right if b[1] &gt;= cut - 2], key=lambda b: b[1])
+    foot   = sorted([b for b in full  if b[1] &gt;= cut - 2], key=lambda b: b[1])
+    return "\n\n".join(b[4].strip() for b in head + body_l + body_r + foot)
+
+def main():
+    ap = argparse.ArgumentParser(description="PDF -> TXT")
+    ap.add_argument("input")
+    ap.add_argument("-o", "--output")
+    args = ap.parse_args()
+    out = args.output or args.input.rsplit(".", 1)[0] + ".txt"
+    doc = fitz.open(args.input)
+    text = "\n\n".join(page_text(p) for p in doc)
+    with open(out, "w", encoding="utf-8") as f:
+        f.write(text)
+    print(f"done: {doc.page_count} pages, {len(text)} chars -> {out}")
+
+if __name__ == "__main__":
+    main()</pre>
+    </div>
+
+    <h3 data-i18n="gradioTitle">Gradio 界面版（app.py，可选）</h3>
+    <p data-i18n="gradioIntro">需要在自己服务器上提供上传界面时使用（GitHub Pages 只托管静态网页，不能运行 Python）。运行 <code>pip install gradio pymupdf</code> 后执行 <code>python app.py</code>。</p>
+    <div class="codeblock">
+      <button class="copybtn" data-copy="gradioCode" type="button" data-i18n="copy">复制</button>
+<pre id="gradioCode">import gradio as gr
+from extract_pdf import page_text
+import fitz
+
+def extract(file):
+    doc = fitz.open(file.name)
+    text = "\n\n".join(page_text(p) for p in doc)
+    out = file.name.rsplit(".", 1)[0] + ".txt"
+    open(out, "w", encoding="utf-8").write(text)
+    return text, out
+
+gr.Interface(fn=extract,
+             inputs=gr.File(file_types=[".pdf"], label="PDF"),
+             outputs=[gr.Textbox(label="全文", lines=20), gr.File(label="TXT")],
+             title="PDF -> TXT").launch()</pre>
+    </div>
+
+    <h3 data-i18n="depTitle">依赖一览</h3>
+    <div class="tblwrap">
+    <table>
+      <tr><th data-i18n="depC1">组件</th><th data-i18n="depC2">版本</th><th data-i18n="depC3">用途</th><th data-i18n="depC4">安装</th></tr>
+      <tr><td><code>pdf.js</code> (cdnjs)</td><td>3.11.174</td><td data-i18n="depR1">网页版：读取 PDF 文本层与坐标</td><td data-i18n="depR1i">CDN 自动加载，无需安装</td></tr>
+      <tr><td><code>PyMuPDF</code></td><td>≥ 1.24</td><td data-i18n="depR2">命令行版提取</td><td><code>pip install pymupdf</code></td></tr>
+      <tr><td><code>gradio</code></td><td>≥ 4</td><td data-i18n="depR3">可选的自托管界面</td><td><code>pip install gradio</code></td></tr>
+    </table>
+    </div>
+    <p data-i18n="pagesNote">发布到 GitHub Pages：把 index.html 推到仓库后，在 Settings → Pages 选择主分支即可，链接可直接发给任何人试用。</p>
+  </section>
+
+  <footer data-i18n="footer">文件只在你的设备上处理——关闭页面，一切即消失。</footer>
+</div>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  var I18N = {
+    zh: {
+      docTitle: "PDF 全文提取 · 导出 TXT",
+      title: "PDF 全文提取 · 导出 TXT",
+      lede: "把论文 PDF 拖进来，即可得到<strong>全文纯文本</strong>，一键导出为 <strong>UTF-8 编码的 TXT 文件</strong>。全部在浏览器本地处理，文件不会上传到任何服务器。",
+      step1: "选择 PDF 文件", step2: "导出 TXT",
+      dzAria: "选择 PDF 文件或拖放到这里",
+      dzBig: "把 PDF 拖到这里，或点击选择",
+      dzSmall: "一次一个文件 · 浏览器本地处理 · 建议 50MB 以内",
+      remove: "移除",
+      sepLabel: "导出文件中的分页标记",
+      sepMarker: "分隔行：「— 第 N 页 —」", sepBlank: "仅空行", sepNone: "无分隔",
+      colLabel: "分栏处理",
+      colAuto: "自动检测（需要时按双栏）", colSingle: "始终单栏",
+      resultTitle: "提取结果",
+      statPages: "页数", statChars: "字符", statWords: "词数", statSize: "TXT 大小",
+      download: "下载 TXT 文件", copyAll: "复制全文", newFile: "新文件",
+      guideTitle: "使用说明（两步）",
+      g1t: "第一步 · 选文件：", g1: "把 PDF 拖到上方区域，或点击选择。选择后自动开始提取。",
+      g2t: "第二步 · 导出：", g2: "在预览中确认文本，点击「下载 TXT 文件」，即以原文件名保存 UTF-8 文本；也可以直接复制全文。",
+      notesTitle: "关于论文排版的说明",
+      n1t: "阅读顺序：", n1: "标题与摘要在最前，然后是左栏全文，最后是右栏——不会左右混读。",
+      n2t: "双栏定位：", n2: "每栏的顶部按该栏第一个纵向紧密行序列的起始位置确定，而不是按文本块的高度猜测。",
+      n3t: "中文折行：", n3: "同一栏内被排版折断的中文行会自动拼接，不会跨栏拼接。",
+      n4t: "公式：", n4: "公式周边的文字与文本层中的符号会被提取；以图片绘制的公式可能不完整，这取决于 PDF 本身。",
+      n5t: "扫描版 PDF：", n5: "如果 PDF 只有图片、没有文本层，工具会给出提示，这类文件需要先做 OCR。",
+      n6t: "范围：", n6: "只提取纯文字，不提取图片、表格格式与参考文献排版。",
+      repoTitle: "代码仓库",
+      repoIntro: "把本页与下面的脚本放进同一个 GitHub 仓库即可自托管：网页版可直接用 GitHub Pages 发布（纯静态，无需服务器），Python 与 Gradio 版克隆后本地运行。仓库结构：",
+      treeWeb: "网页版（本页，pdf.js）", treePy: "命令行版（PyMuPDF）", treeGradio: "Gradio 界面版（可选，自托管）",
+      treeReadmeEn: "英文说明", treeReadmeZh: "中文说明",
+      coreTitle: "核心代码（网页版排序逻辑）",
+      coreIntro: "核心是阅读顺序重建：先按坐标把文字分组为行，识别通栏的标题/摘要，再分别确定左右两栏的起始位置，最后按「页眉 → 左栏 → 右栏 → 通栏结尾」拼接。中文折行只在同一栏内合并。",
+      copy: "复制", copied: "已复制 ✓",
+      pyTitle: "命令行版（Python）",
+      gradioTitle: "Gradio 界面版（app.py，可选）",
+      gradioIntro: "需要在自己服务器上提供上传界面时使用（GitHub Pages 只托管静态网页，不能运行 Python）。运行 <code>pip install gradio pymupdf</code> 后执行 <code>python app.py</code>。",
+      depTitle: "依赖一览",
+      depC1: "组件", depC2: "版本", depC3: "用途", depC4: "安装",
+      depR1: "网页版：读取 PDF 文本层与坐标", depR1i: "CDN 自动加载，无需安装",
+      depR2: "命令行版提取", depR3: "可选的自托管界面",
+      pagesNote: "发布到 GitHub Pages：把 index.html 推到仓库后，在 Settings → Pages 选择主分支即可，链接可直接发给任何人试用。",
+      footer: "文件只在你的设备上处理——关闭页面，一切即消失。",
+      opening: "正在打开文件…",
+      extracting: "正在提取…第 {p} / {n} 页",
+      doneMsg: "提取完成 ✓",
+      pageMarker: "— 第 {n} 页 —",
+      previewCut: "\n\n…（预览已截断——下载文件包含全文）",
+      errNotPdf: "这不是 PDF 文件，请选择 .pdf 文件后重试。",
+      errNoLib: "PDF.js 库加载失败，请检查网络连接后重试。",
+      errPassword: "该文件有密码保护，请先解除保护再重试。",
+      errInvalid: "无法读取该文件——文件可能已损坏或不是有效的 PDF。",
+      errGeneric: "提取时出错：{msg}",
+      errUnknown: "未知错误",
+      warnScanned: "注意：提取出的文字相对于页数过少。该文件很可能是扫描版（只有图片、没有文本层），需要先做 OCR 才能提取。",
+      toastDownloaded: "已下载 {name}",
+      toastCopied: "全文已复制",
+      toastCopyFail: "复制失败——请从预览中手动复制",
+      byteUnit: " 字节"
+    },
+    en: {
+      docTitle: "PDF Full-Text Extractor · Export TXT",
+      title: "PDF Full-Text Extractor · Export TXT",
+      lede: "Drop in a research-paper PDF and get its <strong>full plain text</strong>, exported in one click as a <strong>UTF-8 TXT file</strong>. Everything runs locally in your browser — the file never leaves your device.",
+      step1: "Choose a PDF file", step2: "Export TXT",
+      dzAria: "Choose a PDF file or drop it here",
+      dzBig: "Drop a PDF here, or click to choose",
+      dzSmall: "One file at a time · processed locally in the browser · up to ~50MB works comfortably",
+      remove: "Remove",
+      sepLabel: "Page separators in the output file",
+      sepMarker: "Separator line: “— Page N —”", sepBlank: "Blank line only", sepNone: "No separators",
+      colLabel: "Column handling",
+      colAuto: "Auto-detect (two columns when needed)", colSingle: "Always single column",
+      resultTitle: "Extracted text",
+      statPages: "Pages", statChars: "Characters", statWords: "Words", statSize: "TXT size",
+      download: "Download TXT file", copyAll: "Copy full text", newFile: "New file",
+      guideTitle: "How to use (two steps)",
+      g1t: "Step 1 · Choose the file:", g1: "Drag the PDF onto the area above, or click to pick it. Extraction starts automatically.",
+      g2t: "Step 2 · Export:", g2: "Check the text in the preview, then click “Download TXT file” to save it as UTF-8 under the original file name — or copy the full text directly.",
+      notesTitle: "Notes for research papers",
+      n1t: "Reading order:", n1: "Title and abstract first, then the full left column, then the right column — never mixed line by line across the page.",
+      n2t: "Column tops:", n2: "Each column's top is taken from the start of that column's first close vertical sequence of lines, not guessed from a block's height.",
+      n3t: "Chinese line wraps:", n3: "Chinese lines broken by typesetting are rejoined within the same column only — never across columns.",
+      n4t: "Equations:", n4: "Text around equations and symbols stored in the text layer are extracted; equations drawn as images may come out incomplete — that depends on the PDF itself.",
+      n5t: "Scanned PDFs:", n5: "If the PDF is images with no text layer, the tool warns you; such files need OCR before extraction.",
+      n6t: "Scope:", n6: "Plain text only — no images, no table layout, no reference formatting.",
+      repoTitle: "Code repository",
+      repoIntro: "Put this page and the scripts below into one GitHub repository to self-host it: the web version publishes directly with GitHub Pages (fully static, no server), while the Python and Gradio versions run locally after cloning. Repository layout:",
+      treeWeb: "web version (this page, pdf.js)", treePy: "command-line version (PyMuPDF)", treeGradio: "Gradio UI version (optional, self-hosted)",
+      treeReadmeEn: "English guide", treeReadmeZh: "Chinese guide",
+      coreTitle: "Core code (web reading-order logic)",
+      coreIntro: "The core rebuilds reading order: group words into lines by coordinates, spot the full-width title/abstract, locate each column's start, then join header → left column → right column → full-width ending. Wrapped Chinese lines merge only within their own column.",
+      copy: "Copy", copied: "Copied ✓",
+      pyTitle: "Command-line version (Python)",
+      gradioTitle: "Gradio UI version (app.py, optional)",
+      gradioIntro: "Use this when you want an upload UI on your own server (GitHub Pages hosts static pages only and cannot run Python). Run <code>pip install gradio pymupdf</code>, then <code>python app.py</code>.",
+      depTitle: "Dependencies",
+      depC1: "Component", depC2: "Version", depC3: "Role", depC4: "Install",
+      depR1: "Web version: reads the PDF text layer and word positions", depR1i: "Loaded from CDN — no install",
+      depR2: "Command-line extraction", depR3: "Optional self-hosted UI",
+      pagesNote: "Publishing on GitHub Pages: push index.html to the repository, then choose the main branch under Settings → Pages — the link can be sent to anyone to try instantly.",
+      footer: "Your files are processed only on your device — close the page and everything is gone.",
+      opening: "Opening file…",
+      extracting: "Extracting… page {p} of {n}",
+      doneMsg: "Extraction complete ✓",
+      pageMarker: "— Page {n} —",
+      previewCut: "\n\n… (preview shortened — the download contains the full text)",
+      errNotPdf: "This file is not a PDF. Choose a .pdf file and try again.",
+      errNoLib: "The PDF.js library failed to load — check your internet connection and try again.",
+      errPassword: "This file is password-protected. Remove the protection first, then try again.",
+      errInvalid: "The file could not be read — it seems to be damaged or not a valid PDF.",
+      errGeneric: "An error occurred during extraction: {msg}",
+      errUnknown: "unknown error",
+      warnScanned: "Note: the extracted text is very short for the page count. This file is most likely scanned (images with no text layer) and needs OCR before any text extractor can work on it.",
+      toastDownloaded: "Downloaded {name}",
+      toastCopied: "Full text copied",
+      toastCopyFail: "Copy failed — please copy manually from the preview",
+      byteUnit: " bytes"
+    }
+  };
+  var lang = "zh";
+  var lastStats = null;
+  function t(key, params){
+    var s = (I18N[lang] && I18N[lang][key]) || I18N.zh[key] || key;
+    if (params) Object.keys(params).forEach(function(k){ s = s.replace("{" + k + "}", params[k]); });
+    return s;
+  }
+  function applyLang(next){
+    lang = next;
+    document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
+    document.title = t("docTitle");
+    document.querySelectorAll("[data-i18n]").forEach(function(el){
+      var key = el.getAttribute("data-i18n");
+      if (I18N[lang][key] !== undefined) el.innerHTML = I18N[lang][key];
+    });
+    document.querySelectorAll("[data-i18n-aria]").forEach(function(el){
+      el.setAttribute("aria-label", t(el.getAttribute("data-i18n-aria")));
+    });
+    document.getElementById("langZh").setAttribute("aria-pressed", lang === "zh" ? "true" : "false");
+    document.getElementById("langEn").setAttribute("aria-pressed", lang === "en" ? "true" : "false");
+    if (lastStats) renderStats();
+  }
+  document.getElementById("langZh").addEventListener("click", function(){ applyLang("zh"); });
+  document.getElementById("langEn").addEventListener("click", function(){ applyLang("en"); });
+
+  var pdfjsLib = window.pdfjsLib;
+  if (pdfjsLib) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  }
+
+  var dz = document.getElementById("dropzone");
+  var input = document.getElementById("fileInput");
+  var chip = document.getElementById("fileChip");
+  var fileNameEl = document.getElementById("fileName");
+  var fileMetaEl = document.getElementById("fileMeta");
+  var progressWrap = document.getElementById("progressWrap");
+  var progressBar = document.getElementById("progressBar");
+  var progressText = document.getElementById("progressText");
+  var errorBox = document.getElementById("errorBox");
+  var warnBox = document.getElementById("warnBox");
+  var resultCard = document.getElementById("resultCard");
+  var preview = document.getElementById("preview");
+  var downloadBtn = document.getElementById("downloadBtn");
+  var toast = document.getElementById("toast");
+
+  var extractedText = "";
+  var outName = "output.txt";
+  var busy = false;
+
+  function showToast(msg){
+    toast.textContent = msg;
+    toast.classList.add("show");
+    setTimeout(function(){ toast.classList.remove("show"); }, 2400);
+  }
+  function fmtSize(bytes){
+    if (bytes < 1024) return bytes + t("byteUnit");
+    if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + " KB";
+    return (bytes/(1024*1024)).toFixed(2) + " MB";
+  }
+  function fmtNum(n){ return n.toLocaleString(lang === "zh" ? "zh-CN" : "en-US"); }
+  function showError(msg){
+    errorBox.textContent = msg;
+    errorBox.classList.add("show");
+  }
+  function clearMessages(){
+    errorBox.classList.remove("show");
+    warnBox.classList.remove("show");
+  }
+  function renderStats(){
+    if (!lastStats) return;
+    document.getElementById("statPages").textContent = fmtNum(lastStats.pages);
+    document.getElementById("statChars").textContent = fmtNum(lastStats.chars);
+    document.getElementById("statWords").textContent = fmtNum(lastStats.words);
+    document.getElementById("statSize").textContent = fmtSize(lastStats.size);
+  }
+
+  dz.addEventListener("click", function(){ input.click(); });
+  dz.addEventListener("keydown", function(e){
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); input.click(); }
+  });
+  ["dragenter","dragover"].forEach(function(ev){
+    dz.addEventListener(ev, function(e){ e.preventDefault(); dz.classList.add("drag"); });
+  });
+  ["dragleave","drop"].forEach(function(ev){
+    dz.addEventListener(ev, function(e){ e.preventDefault(); dz.classList.remove("drag"); });
+  });
+  dz.addEventListener("drop", function(e){
+    var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) handleFile(f);
+  });
+  input.addEventListener("change", function(){
+    if (input.files && input.files[0]) handleFile(input.files[0]);
+    input.value = "";
+  });
+  document.getElementById("removeBtn").addEventListener("click", resetAll);
+  document.getElementById("newBtn").addEventListener("click", function(){
+    resetAll();
+    dz.scrollIntoView({behavior:"smooth", block:"center"});
+    input.click();
+  });
+
+  function resetAll(){
+    extractedText = "";
+    lastStats = null;
+    chip.classList.remove("show");
+    resultCard.classList.remove("show");
+    progressWrap.classList.remove("show");
+    clearMessages();
+    preview.textContent = "";
+  }
+
+  /* Reading order: title/abstract (full width) first, then the left
+     column in full, then the right column, then any full-width ending.
+     A column's top is the start of its first close vertical sequence
+     of lines — never inferred from a block's height.
+     Wrapped CJK lines are rejoined inside their own column only. */
+
+  function isCJK(s){ return /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/.test(s); }
+
+  function buildLines(items){
+    if (!items.length) return [];
+    var sorted = items.slice().sort(function(a,b){
+      if (Math.abs(a.y - b.y) > 2) return b.y - a.y;
+      return a.x - b.x;
+    });
+    var raw = [], cur = null;
+    sorted.forEach(function(it){
+      var tol = Math.max(2.5, (it.h || 10) * 0.55);
+      if (cur && Math.abs(it.y - cur.y) <= tol) cur.items.push(it);
+      else { cur = { y: it.y, h: it.h || 10, items: [it] }; raw.push(cur); }
+    });
+    return raw.map(function(line){
+      var joinedRaw = line.items.map(function(i){ return i.str; }).join("");
+      var arabic = /[\u0600-\u06FF]/.test(joinedRaw);
+      var txt = line.items.slice().sort(function(a,b){ return arabic ? b.x - a.x : a.x - b.x; });
+      var s = "", prev = null;
+      txt.forEach(function(it){
+        if (prev) {
+          var gap = arabic ? (prev.x - (it.x + it.w)) : (it.x - (prev.x + prev.w));
+          if (gap > 1.5 && s && !/\s$/.test(s) && !/^\s/.test(it.str)) s += " ";
+        }
+        s += it.str;
+        prev = it;
+      });
+      var x0 = Math.min.apply(null, line.items.map(function(i){ return i.x; }));
+      var x1 = Math.max.apply(null, line.items.map(function(i){ return i.x + (i.w || 0); }));
+      return { y: line.y, h: line.h, x0: x0, x1: x1, cx: (x0 + x1) / 2,
+               text: s.replace(/[ \t]+/g, " ").trim() };
+    }).filter(function(l){ return l.text; });
+  }
+
+  function joinLines(lines){
+    if (!lines.length) return "";
+    var sorted = lines.slice().sort(function(a,b){ return b.y - a.y; });
+    var doc = sorted.map(function(l){ return l.text; }).join("");
+    var cjkDoc = isCJK(doc);
+    var out = [], prev = null;
+    sorted.forEach(function(line){
+      var s = line.text;
+      if (prev) {
+        var gapY = prev.y - line.y;
+        if (gapY > (line.h || 10) * 1.7) { out.push(""); out.push(s); prev = line; return; }
+      }
+      if (out.length && out[out.length - 1] !== "") {
+        var last = out[out.length - 1];
+        if (/-$/.test(last) && /^[a-zà-ÿ]/.test(s)) {
+          out[out.length - 1] = last.slice(0, -1) + s; prev = line; return;
+        }
+        if (cjkDoc && isCJK(last) && !/[。！？；：、.!?;:]$/.test(last)) {
+          out[out.length - 1] = last + s; prev = line; return;
+        }
+      }
+      out.push(s);
+      prev = line;
+    });
+    return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  }
+
+  function seqStartY(colLines){
+    var s = colLines.slice().sort(function(a,b){ return b.y - a.y; });
+    for (var i = 0; i < s.length - 1; i++) {
+      var gap = s[i].y - s[i + 1].y;
+      if (gap <= Math.max(s[i].h, s[i + 1].h) * 2.0) return s[i].y;
+    }
+    return s.length ? s[0].y : 0;
+  }
+
+  function pageToText(items, pageWidth){
+    var mode = document.getElementById("colMode").value;
+    var clean = items.filter(function(i){ return i.str !== undefined; })
+      .map(function(i){
+        return { str: i.str, x: i.transform[4], y: i.transform[5],
+                 w: i.width || 0, h: i.height || 10 };
+      });
+    if (!clean.length) return "";
+    var lines = buildLines(clean);
+    if (mode !== "auto" || lines.length < 8) return joinLines(lines);
+
+    var mid = pageWidth / 2;
+    var full = [], left = [], right = [];
+    lines.forEach(function(l){
+      if (l.x0 < mid - 10 && l.x1 > mid + 10 && (l.x1 - l.x0) > pageWidth * 0.45) full.push(l);
+      else if (l.cx < mid) left.push(l);
+      else right.push(l);
+    });
+    var minSide = Math.min(left.length, right.length);
+    if (!left.length || !right.length || minSide / lines.length < 0.15) return joinLines(lines);
+
+    var cut = Math.max(seqStartY(left), seqStartY(right));
+    var header = lines.filter(function(l){ return l.y > cut + 2; });
+    var footer = full.filter(function(l){ return l.y <= cut + 2; });
+    var bodyL = left.filter(function(l){ return l.y <= cut + 2; });
+    var bodyR = right.filter(function(l){ return l.y <= cut + 2; });
+    return [joinLines(header), joinLines(bodyL), joinLines(bodyR), joinLines(footer)]
+      .filter(Boolean).join("\n\n");
+  }
+
+  async function handleFile(file){
+    if (busy) return;
+    clearMessages();
+    resultCard.classList.remove("show");
+    var isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+    if (!isPdf) { showError(t("errNotPdf")); return; }
+    if (!pdfjsLib) { showError(t("errNoLib")); return; }
+
+    outName = file.name.replace(/\.pdf$/i, "") + ".txt";
+    fileNameEl.textContent = file.name;
+    fileMetaEl.textContent = fmtSize(file.size);
+    chip.classList.add("show");
+    progressWrap.classList.add("show");
+    progressBar.style.width = "0%";
+    progressText.textContent = t("opening");
+    busy = true;
+    downloadBtn.disabled = true;
+
+    try {
+      var buf = await file.arrayBuffer();
+      var pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+      var sepMode = document.getElementById("pageSep").value;
+      var parts = [];
+      var totalChars = 0;
+      for (var p = 1; p <= pdf.numPages; p++) {
+        var page = await pdf.getPage(p);
+        var viewport = page.getViewport({ scale: 1 });
+        var content = await page.getTextContent();
+        var text = pageToText(content.items, viewport.width);
+        totalChars += text.length;
+        if (sepMode === "marker") parts.push(t("pageMarker", { n: p }) + "\n\n" + text);
+        else parts.push(text);
+        progressBar.style.width = Math.round(p / pdf.numPages * 100) + "%";
+        progressText.textContent = t("extracting", { p: p, n: pdf.numPages });
+      }
+      extractedText = parts.join(sepMode === "none" ? "\n" : "\n\n").trim() + "\n";
+      progressText.textContent = t("doneMsg");
+
+      lastStats = {
+        pages: pdf.numPages,
+        chars: extractedText.length,
+        words: extractedText.split(/\s+/).filter(Boolean).length,
+        size: new Blob([extractedText]).size
+      };
+      renderStats();
+      preview.textContent = extractedText.length > 60000
+        ? extractedText.slice(0, 60000) + t("previewCut")
+        : extractedText;
+      resultCard.classList.add("show");
+      downloadBtn.disabled = false;
+      resultCard.scrollIntoView({behavior:"smooth", block:"start"});
+
+      if (pdf.numPages > 0 && totalChars / pdf.numPages < 60) {
+        warnBox.textContent = t("warnScanned");
+        warnBox.classList.add("show");
+      }
+    } catch (err) {
+      progressWrap.classList.remove("show");
+      if (err && err.name === "PasswordException") showError(t("errPassword"));
+      else if (err && err.name === "InvalidPDFException") showError(t("errInvalid"));
+      else showError(t("errGeneric", { msg: err && err.message ? err.message : t("errUnknown") }));
+    } finally {
+      busy = false;
+    }
+  }
+
+  downloadBtn.addEventListener("click", function(){
+    if (!extractedText) return;
+    var blob = new Blob([extractedText], { type: "text/plain;charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = outName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+    showToast(t("toastDownloaded", { name: outName }));
+  });
+
+  document.getElementById("copyBtn").addEventListener("click", function(){
+    if (!extractedText) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(extractedText).then(
+        function(){ showToast(t("toastCopied")); },
+        function(){ fallbackCopy(); });
+    } else fallbackCopy();
+  });
+  function fallbackCopy(){
+    var ta = document.createElement("textarea");
+    ta.value = extractedText;
+    ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); showToast(t("toastCopied")); }
+    catch(e){ showToast(t("toastCopyFail")); }
+    ta.remove();
+  }
+
+  document.querySelectorAll("[data-copy]").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      var el = document.getElementById(btn.getAttribute("data-copy"));
+      var txt = el ? el.textContent : "";
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).then(function(){
+          btn.textContent = t("copied");
+          setTimeout(function(){ btn.textContent = t("copy"); }, 1800);
+        });
+      }
+    });
+  });
+
+  applyLang("zh");
+})();
+</script>
+</body>
+</html>
