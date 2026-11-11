@@ -624,15 +624,28 @@ gr.Interface(fn=extract,
       var s = line.text;
       if (prev) {
         var gapY = prev.y - line.y;
-        if (gapY > (line.h || 10) * 1.7) { out.push(""); out.push(s); prev = line; return; }
+        // تباعد الأسطر في الأوراق الصينية واسع (نسبة ~1.94 من ارتفاع الحرف)،
+        // فعتبة 1.7 كانت تُدرج سطراً فارغاً بين كل سطرين وتمنع الوصل كلياً.
+        // 2.1 تفصل أسطر المتن (1.94) عن فواصل الحقول والعناوين (≥2.14).
+        if (gapY > (line.h || 10) * 2.1) { out.push(""); out.push(s); prev = line; return; }
       }
-      if (out.length && out[out.length - 1] !== "") {
+      // الوصل داخل المجموعة نفسها فقط، ولا يُوصل سطر مُزاح (بداية فقرة جديدة).
+      if (out.length && out[out.length - 1] !== "" && prev && line.x0 <= prev.x0 + 2) {
         var last = out[out.length - 1];
         if (/-$/.test(last) && /^[a-zà-ÿ]/.test(s)) {
           out[out.length - 1] = last.slice(0, -1) + s; prev = line; return;
         }
-        if (cjkDoc && isCJK(last) && !/[。！？；：、.!?;:]$/.test(last)) {
+        // الوصل الصيني: يجب أن ينتهي السطر السابق بحرف صيني ويبدأ التالي
+        // بحرف صيني (لا يكفي احتواء السطر على صينية — وإلا التصق "Zhang"
+        // بـ"能" بلا مسافة)، وألا ينتهي بعلامة ترقيم.
+        if (cjkDoc && /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]$/.test(last)
+            && /^[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/.test(s)
+            && !/[。！？；：、.!?;:]$/.test(last)) {
           out[out.length - 1] = last + s; prev = line; return;
+        }
+        // الوصل اللاتيني: سطر ينتهي بحرف صغير ويليه سطر يبدأ بحرف صغير.
+        if (/[a-zà-ÿ]$/.test(last) && /^[a-zà-ÿ]/.test(s)) {
+          out[out.length - 1] = last + " " + s; prev = line; return;
         }
       }
       out.push(s);

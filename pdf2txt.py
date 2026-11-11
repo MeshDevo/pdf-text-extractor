@@ -49,30 +49,61 @@ def extract_page_columns(page) -> str:
     (نص صيني غالباً)، فلا يُعتمد ارتفاع الكتلة لتحديد العمودين.
     بدلاً من ذلك: قمة العمودين هي بداية أول تتابع رأسي متقارب من الكتل
     في كل عمود؛ كل ما فوقها رأس (عنوان، ملخص)، وكل ما تحتها تذييل،
-    والعمود الأيسر يُقرأ كاملاً ثم الأيمن. والأسطر الصينية الملفوفة
-    تُلصق داخل العمود الواحد فقط، لا عبر حدود الكتل.
+    والعمود الأيسر يُقرأ كاملاً ثم الأيمن. والأسطر الملفوفة تُلصق
+    داخل العمود الواحد فقط، لا عبر الأعمدة ولا عبر الرأس والتذييل.
     """
 
     def is_cjk(char: str) -> bool:
         return ("\u3400" <= char <= "\u4dbf" or "\u4e00" <= char <= "\u9fff"
                 or "\uf900" <= char <= "\ufaff")
 
+    def is_latin_lower(char: str) -> bool:
+        return "a" <= char <= "z" or "à" <= char <= "ÿ"
+
+    def join_sep(prev_char: str, next_char: str):
+        """الفاصل عند وصل سطرين متتاليين: '' للصينية، ' ' للاتينية
+        الصغيرة، None لعدم الوصل (نهاية جملة، عنوان، بداية فقرة...)."""
+        if is_cjk(prev_char) and is_cjk(next_char):
+            return ""
+        if is_latin_lower(prev_char) and is_latin_lower(next_char):
+            return " "
+        return None
+
     def join_wrapped_lines(text: str) -> str:
-        """وصل الأسطر الملفوفة داخل نص واحد: حرف صيني + سطر + حرف صيني."""
+        """وصل الأسطر الملفوفة داخل نص واحد (داخل الكتلة نفسها فقط).
+
+        حرف صيني + سطر + حرف صيني يُلصقان بلا فاصل، وحرف لاتيني
+        صغير + سطر + حرف لاتيني صغير يُلصقان بمسافة. النظرة الأمامية
+        (?=...) لا تستهلك الحرف التالي، فيلصق re.sub كل الفواصل
+        المتتالية — بدونه كان يلصق الأسطر أزواجاً ويترك فاصلاً بين
+        كل زوجين (السبب الذي أبقى «对象之/一» مكسورة داخل الكتلة).
+        """
         cjk = r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]"
-        return re.sub(f"({cjk})\n({cjk})", r"\1\2", text)
+        text = re.sub(f"({cjk})\n(?={cjk})", r"\1", text)
+        text = re.sub(r"([a-zà-ÿ])\n(?=[a-zà-ÿ])", r"\1 ", text)
+        return text
 
     def assemble(group, join_lines: bool) -> str:
-        """يجمع كتل مجموعة واحدة مرتبة؛ ويلصق الأسطر الصينية المتتابعة داخل العمود فقط."""
+        """يجمع كتل مجموعة واحدة مرتبة؛ ويلصق الأسطر المتتابعة داخل العمود فقط.
+
+        الوصل عبر الكتل يشترط ثلاثة أمور: فجوة رأسية صغيرة (≤10 نقاط —
+        تباعد أسطر الورقة الصينية 6.3–8.3، وفواصل الحقول/الفقرات ≥10.9؛
+        العتبة القديمة 6 كانت ترفض كل الأسطر)، وعدم إزاحة الكتلة التالية
+        لليمين (بداية فقرة جديدة تُزاح عادة)، واستمرار الكلمة/الجملة
+        (ينتهي السابق ويبدأ التالي بما يدل على ذلك).
+        """
         group = sorted(group, key=lambda b: (round(b[1]), b[0]))
         out: list[str] = []
         prev_block = None
         for block in group:
             text = join_wrapped_lines(block[4].strip())
-            if (join_lines and prev_block is not None and out
-                    and 0 <= (block[1] - prev_block[3]) <= 6
-                    and out[-1] and is_cjk(out[-1][-1]) and text and is_cjk(text[0])):
-                out[-1] = out[-1] + text
+            sep = None
+            if join_lines and prev_block is not None and out and text and out[-1]:
+                gap = block[1] - prev_block[3]
+                if 0 <= gap <= 10 and block[0] <= prev_block[0] + 2:
+                    sep = join_sep(out[-1][-1], text[0])
+            if sep is not None:
+                out[-1] = out[-1] + sep + text
             else:
                 out.append(text)
             prev_block = block
